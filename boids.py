@@ -5,6 +5,7 @@
 # Peter Pegues
 # python 3.8.1
 # pygame 1.9.6
+
 import os, pygame, random, math, copy
 from pygame.locals import *
 from pygame.compat import geterror
@@ -81,8 +82,7 @@ class Boid(pygame.sprite.Sprite):
                 boid_dis = math.hypot(boid.loc[0]-self.loc[0], boid.loc[1]-self.loc[1])
                 if boid_dis < detection_distance:
                     boid_dir = self.cord_trans(boid.loc)
-                    
-                
+                     
         return boid_dir
     
     ##################
@@ -173,7 +173,6 @@ class Boid(pygame.sprite.Sprite):
         elif self.loc_next[1] <= 0:
             self.loc_next[1] = self.loc[1] + 600
         
-        
     def update_loc(self):
         # Set the draw location
         self.rect.x = self.loc_next[0]
@@ -194,7 +193,6 @@ def draw_screen(screen):
     screen.blit(background, (0, 0))
     pygame.display.flip()
 
-
 ########
 # Main #
 ########
@@ -211,13 +209,11 @@ def main():
     background = background.convert()
     background.fill((250, 250, 250))
     
-
     # Create the boids
     boids_group = pygame.sprite.Group()
     for n in range(30):
         loc = [random.randint(0,599), random.randint(0,599)]
         boids_group.add(Boid(init_loc=loc))
-    
     
     clock = pygame.time.Clock()
     going = True
@@ -233,7 +229,6 @@ def main():
                 # Click to make a boid
                 loc = list(pygame.mouse.get_pos())
                 boids_group.add(Boid(init_loc=loc))
-        
         
         # Draw Screen
         boids_group.update(boids_group)
