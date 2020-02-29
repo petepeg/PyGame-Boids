@@ -155,16 +155,6 @@ class Boid(pygame.sprite.Sprite):
             if self.heading > 360:
                 self.heading = 360 - self.heading
         
-
-        '''# turning speed
-        turning_speed = 15
-        if self.target_heading < self.heading:
-            self.heading -= turning_speed
-        elif self.target_heading > self.heading:
-            self.heading += turning_speed'''
-        
-        
-
         # Calc movement vectors #
         vect_x = int(math.sin(math.radians(self.heading))*self.speed)
         vect_y = int(math.cos(math.radians(self.heading))*self.speed)
