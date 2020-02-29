@@ -1,4 +1,9 @@
-# Import Modules
+#########
+# BOIDS #
+#########
+# Peter Pegues
+# python 3.8.1
+# pygame 1.9.6
 import os, pygame, random, math
 from pygame.locals import *
 from pygame.compat import geterror
