@@ -1,10 +1,11 @@
+#!/usr/bin/env
 #########
 # BOIDS #
 #########
 # Peter Pegues
 # python 3.8.1
 # pygame 1.9.6
-import os, pygame, random, math
+import os, pygame, random, math, copy
 from pygame.locals import *
 from pygame.compat import geterror
 
@@ -40,6 +41,7 @@ class Boid(pygame.sprite.Sprite):
         self.speed = 4
         self.heading = random.randint(0, 359)
         self.loc = init_loc
+        self.loc_next = copy.copy(self.loc)
         self.rect.x = self.loc[0]
         self.rect.y = self.loc[1]
     
@@ -71,7 +73,6 @@ class Boid(pygame.sprite.Sprite):
     ##################
     def avoid_the_boid(self, boids_group):
         # find closeest boid on the front and sides
-        # seens to work but quads are mirrored? carry on.
         detection_distance = 15
         boid_dir = 0
         for boid in boids_group:
@@ -168,23 +169,26 @@ class Boid(pygame.sprite.Sprite):
         vect_x = int(math.sin(math.radians(self.heading))*self.speed)
         vect_y = int(math.cos(math.radians(self.heading))*self.speed)
         # Set New Pos
-        self.loc[0] -= vect_x
-        self.loc[1] += vect_y
+        self.loc_next[0] -= vect_x
+        self.loc_next[1] += vect_y
         
         ## Wrap screen
-        if self.loc[0] >= 600:
-            self.loc[0] = 600 - self.loc[0]
-        elif self.loc[0] <= 0:
-            self.loc[0] = self.loc[0] + 600
+        if self.loc_next[0] >= 600:
+            self.loc_next[0] = 600 - self.loc[0]
+        elif self.loc_next[0] <= 0:
+            self.loc_next[0] = self.loc[0] + 600
         
-        if self.loc[1] >= 600:
-            self.loc[1] = 600 - self.loc[1]
-        elif self.loc[1] <= 0:
-            self.loc[1] = self.loc[1] + 600
+        if self.loc_next[1] >= 600:
+            self.loc_next[1] = 600 - self.loc[1]
+        elif self.loc_next[1] <= 0:
+            self.loc_next[1] = self.loc[1] + 600
         
+        
+    def update_loc(self):
         # Set the draw location
-        self.rect.x = self.loc[0]
-        self.rect.y = self.loc[1]
+        self.rect.x = self.loc_next[0]
+        self.rect.y = self.loc_next[1]
+        self.loc = copy.copy(self.loc_next)
 
 ###################
 # Draw the screen #
@@ -243,6 +247,8 @@ def main():
         
         # Draw Screen
         boids_group.update(boids_group)
+        for boid in boids_group:
+            boid.update_loc()
         screen.blit(background, (0, 0))
         boids_group.draw(screen)
         pygame.display.flip()
