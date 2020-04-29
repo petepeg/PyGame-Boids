@@ -37,7 +37,7 @@ class Boid(pygame.sprite.Sprite):
         self.image.fill(self.color)
         self.rect = self.image.get_rect()
         # Group detection radius, higher number makes them more stickey
-        self.radius = 25
+        self.radius = 15
         # Inital speed, heading, location
         self.speed = 4
         self.heading = random.randint(0, 359)
@@ -74,7 +74,7 @@ class Boid(pygame.sprite.Sprite):
     ##################
     def avoid_the_boid(self, boids_group):
         # find closeest boid on the front and sides
-        detection_distance = 15
+        detection_distance = 30
         boid_dir = 0
         for boid in boids_group:
             # don't look at yourself
@@ -118,6 +118,7 @@ class Boid(pygame.sprite.Sprite):
         
         # Alignment
         # Heading Avg
+        # This might be too aggresive
         if len(local_group) > 1:
             heading_avg = 0
             for bh in local_group:
@@ -127,39 +128,66 @@ class Boid(pygame.sprite.Sprite):
         
         # Cohesion
         # Turn to Center of Mass
-        c_mass_offset = 15
+        # This is workign better than the last version but still sucks
         c_mass_loc = self.center_mass(boids_group.sprites())
+        #c_mass_loc = [300, 300]
         if c_mass_loc is not None:
-            c_mass_dir = self.cord_trans(c_mass_loc)
-            if c_mass_dir == 1:
-                self.heading -= c_mass_offset
-            elif c_mass_dir == 2:
-                self.heading += c_mass_offset
-            elif c_mass_dir == 3:
-                self.heading -= c_mass_offset
-            elif c_mass_dir == 4:
-                self.heading += c_mass_offset
+            deg_Turn = 15
+            dx = c_mass_loc[0] - self.loc[0]
+            dy = c_mass_loc[1] - self.loc[1]
+            if dx == 0: # dont divide by zero
+                dx = 0.0000000000001
+            if dy == 0:
+                dy = 0.0000000000001
+            angleR = math.atan(dy/dx)
+            angleD = int(math.degrees(angleR))
+
+            # FIXME not sure why this works but they were going the wrong way in certain quads, so i used a hammer.
+            if dx < 0 or dy < 0:
+                angleD = angleD + 180
+            if dx > 0 and dy < 0:
+                # i know this is just setting it back, im tired, fix it later
+                angleD = angleD - 180
+            
+            # Scale angle
+            if angleD < 0:
+                angleD = 360 + angleD
+            elif angleD > 360:
+                angleD = angleD - 360
+
+            # decide if clockwise or counter clockwise is shorter
+            if angleD < self.heading:
+                if 360 + angleD - self.heading < self.heading - angleD:
+                    self.heading += deg_Turn
+                else:
+                    self.heading -= deg_Turn
+                    
+            elif angleD > self.heading:
+                if angleD - self.heading < 360 - angleD + self.heading:
+                    self.heading += deg_Turn
+                else:
+                    self.heading -= deg_Turn
         
         # Seperation
+        # This still needs a lot of work, very iffy at the moment
         close_boid_dir = self.avoid_the_boid(boids_group.sprites())
-        sep_offset = 15
+        sep_deg_turn = 30
         if close_boid_dir == 1:
-            self.heading += sep_offset
+            self.heading += sep_deg_turn
         elif close_boid_dir == 2:
-            self.heading -= sep_offset
+            self.heading -= sep_deg_turn
 
         # Heading corrections, keeps headings from coumpunding into gigantic numbers
         while self.heading > 360 or self.heading < 0:
             if self.heading < 0:
-                self.heading = 360 + self.heading
+                self.heading = self.heading + 360
             if self.heading > 360:
-                self.heading = 360 - self.heading
-        
+                self.heading = self.heading - 360
         # Calc movement vectors #
-        vect_x = int(math.sin(math.radians(self.heading))*self.speed)
-        vect_y = int(math.cos(math.radians(self.heading))*self.speed)
+        vect_x = int(math.cos(math.radians(self.heading))*self.speed)
+        vect_y = int(math.sin(math.radians(self.heading))*self.speed)
         # Set New Pos
-        self.loc_next[0] -= vect_x
+        self.loc_next[0] += vect_x
         self.loc_next[1] += vect_y
         
         ## Wrap screen
@@ -211,7 +239,7 @@ def main():
     
     # Create the boids
     boids_group = pygame.sprite.Group()
-    for n in range(30):
+    for n in range(60):
         loc = [random.randint(0,599), random.randint(0,599)]
         boids_group.add(Boid(init_loc=loc))
     
