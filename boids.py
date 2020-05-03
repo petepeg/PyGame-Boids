@@ -36,11 +36,10 @@ class Boid(pygame.sprite.Sprite):
         self.color = (random.randint(0,255),random.randint(0,255),random.randint(0,255))
         self.image.fill(self.color)
         self.rect = self.image.get_rect()
-        # Group detection radius, higher number makes them more stickey
-        self.radius = 15
         # Inital speed, heading, location
         self.speed = 4
-        self.heading = random.randint(0, 359)
+        self.target_heading = random.randint(0, 359)
+        self.current_heading = copy.copy(self.target_heading)
         self.loc = init_loc
         self.loc_next = copy.copy(self.loc)
         self.rect.x = self.loc[0]
@@ -53,8 +52,8 @@ class Boid(pygame.sprite.Sprite):
         dx = loc[0] - self.loc[0]
         dy = loc[1] - self.loc[1] 
         # transform dx dy to new axis
-        tx = int(dx*math.cos(math.radians(self.heading)) + dy*math.sin(math.radians(self.heading)))
-        ty = int(dy*math.cos(math.radians(self.heading)) - dx*math.sin(math.radians(self.heading)))
+        tx = int(dx*math.cos(math.radians(self.current_heading)) + dy*math.sin(math.radians(self.current_heading)))
+        ty = int(dy*math.cos(math.radians(self.current_heading)) - dx*math.sin(math.radians(self.current_heading)))
         # quads
         if tx > 0 and ty > 0:
             boid_dir = 1
@@ -68,42 +67,54 @@ class Boid(pygame.sprite.Sprite):
             boid_dir = 0
                 
         return boid_dir
-    
+    #################
+    # Boid Distance #
+    #################
+    def distance_to_boid(self,boid):
+        return math.hypot(boid.loc[0]-self.loc[0], boid.loc[1]-self.loc[1])
+
     ##################
     # Boid Avoidance #
     ##################
     def avoid_the_boid(self, boids_group):
         # find closeest boid on the front and sides
-        detection_distance = 30
+        detection_distance = 10
+        min_boid = 10
         boid_dir = 0
         for boid in boids_group:
             # don't look at yourself
             if boid.loc != self.loc:
-                boid_dis = math.hypot(boid.loc[0]-self.loc[0], boid.loc[1]-self.loc[1])
-                if boid_dis < detection_distance:
+                boid_dis = self.distance_to_boid(boid)
+                if boid_dis <= detection_distance and boid_dis < min_boid:
+                    min_boid = boid_dis
                     boid_dir = self.cord_trans(boid.loc)
-                     
-        return boid_dir
+        if min_boid < 2:
+            # emergency turn
+            return 5
+        else:
+            return boid_dir
     
     ##################
     # Center of Mass #
     ##################
     # Find Center of mass for local group
     def center_mass(self, boids_group):
-        detection_distance = 30
+        detection_distance = 100
         close_boids = []
         c_mass = [0,0]
 
         for boid in boids_group:
-            boid_dis = math.hypot(boid.loc[0]-self.loc[0], boid.loc[1]-self.loc[1])
-            if boid_dis < detection_distance:
+            boid_dis = self.distance_to_boid(boid)
+            if boid_dis <= detection_distance:
                 close_boids.append(boid)
         if len(close_boids) > 1:
             for boid in close_boids:
                 c_mass[0] += boid.loc[0]
                 c_mass[1] += boid.loc[1]
+            
             c_mass[0] = int(c_mass[0]/len(close_boids))
             c_mass[1] = int(c_mass[1]/len(close_boids))
+            
             return c_mass
         else:
             return None
@@ -113,26 +124,27 @@ class Boid(pygame.sprite.Sprite):
     ###################
     def update(self, boids_group):
         # Get Close by boids
-        # I used pygames built in collision detect here, the circle size is based off self.radius
-        local_group = pygame.sprite.spritecollide(self, boids_group, False, pygame.sprite.collide_circle)
-        
+        local_group = []
+        detection_distance = 10
+        for boid in boids_group.sprites():
+            if self.distance_to_boid(boid) <= detection_distance:
+                local_group.append(boid)
         # Alignment
         # Heading Avg
-        # This might be too aggresive
+        # If detection distance is too high they seem to convirge on 180ish and I suspect because its the avg of numbers 0-360. The center of mass calc than somehow rotates this avg by 90 deg making them prefer 270. Weird but ok.
         if len(local_group) > 1:
             heading_avg = 0
-            for bh in local_group:
-                heading_avg += bh.heading
+            for boid in local_group:
+                heading_avg += boid.current_heading
             heading_avg = int(heading_avg/len(local_group))
-            self.heading = heading_avg
-        
+            self.target_heading = heading_avg
         # Cohesion
         # Turn to Center of Mass
         # This is workign better than the last version but still sucks
         c_mass_loc = self.center_mass(boids_group.sprites())
         #c_mass_loc = [300, 300]
         if c_mass_loc is not None:
-            deg_Turn = 15
+            deg_Turn = 10
             dx = c_mass_loc[0] - self.loc[0]
             dy = c_mass_loc[1] - self.loc[1]
             if dx == 0: # dont divide by zero
@@ -142,12 +154,9 @@ class Boid(pygame.sprite.Sprite):
             angleR = math.atan(dy/dx)
             angleD = int(math.degrees(angleR))
 
-            # FIXME not sure why this works but they were going the wrong way in certain quads, so i used a hammer.
-            if dx < 0 or dy < 0:
+            # Correct the heading when target is to the left
+            if dx < 0:
                 angleD = angleD + 180
-            if dx > 0 and dy < 0:
-                # i know this is just setting it back, im tired, fix it later
-                angleD = angleD - 180
             
             # Scale angle
             if angleD < 0:
@@ -156,36 +165,64 @@ class Boid(pygame.sprite.Sprite):
                 angleD = angleD - 360
 
             # decide if clockwise or counter clockwise is shorter
-            if angleD < self.heading:
-                if 360 + angleD - self.heading < self.heading - angleD:
-                    self.heading += deg_Turn
+            if angleD < self.target_heading:
+                if self.target_heading - angleD > 180:
+                    self.target_heading += deg_Turn
                 else:
-                    self.heading -= deg_Turn
-                    
-            elif angleD > self.heading:
-                if angleD - self.heading < 360 - angleD + self.heading:
-                    self.heading += deg_Turn
+                    self.target_heading -= deg_Turn
+
+            elif angleD > self.target_heading:
+                if angleD - self.target_heading > 180:
+                    self.target_heading -= deg_Turn
                 else:
-                    self.heading -= deg_Turn
+                    self.target_heading += deg_Turn
         
         # Seperation
-        # This still needs a lot of work, very iffy at the moment
+        # The left front should be quad 1 and the rigth front should be quad 4 after the transformation
         close_boid_dir = self.avoid_the_boid(boids_group.sprites())
-        sep_deg_turn = 30
+        sep_deg_turn = 15
         if close_boid_dir == 1:
-            self.heading += sep_deg_turn
-        elif close_boid_dir == 2:
-            self.heading -= sep_deg_turn
-
+            self.target_heading -= sep_deg_turn
+        elif close_boid_dir == 4:
+            self.target_heading += sep_deg_turn
+        elif close_boid_dir == 5:
+            # Emergency Turn
+            self.target_heading += sep_deg_turn * 3
+        
         # Heading corrections, keeps headings from coumpunding into gigantic numbers
-        while self.heading > 360 or self.heading < 0:
-            if self.heading < 0:
-                self.heading = self.heading + 360
-            if self.heading > 360:
-                self.heading = self.heading - 360
+        while self.target_heading > 360 or self.target_heading < 0:
+            if self.target_heading < 0:
+                self.target_heading = self.target_heading + 360
+            if self.target_heading > 360:
+                self.target_heading = self.target_heading - 360
+
+        # Turning, FIXME iffy at the moment
+        turning_speed = 5
+        # Turning attempt 2
+        if self.target_heading > self.current_heading:
+            if self.target_heading - self.current_heading > 180:
+                self.current_heading -= turning_speed
+            else:
+                self.current_heading += turning_speed
+        
+        elif self.target_heading < self.current_heading:
+            if self.current_heading - self.target_heading > 180:
+                self.current_heading += turning_speed
+            else:
+                self.current_heading -= turning_speed
+        
+        # Heading corrections, keeps headings from coumpunding into gigantic numbers
+        while self.current_heading > 360 or self.current_heading < 0:
+            if self.current_heading < 0:
+                self.current_heading = self.current_heading + 360
+            if self.current_heading > 360:
+                self.current_heading = self.current_heading - 360
+        
+        self.target_heading = copy.copy(self.current_heading)
+
         # Calc movement vectors #
-        vect_x = int(math.cos(math.radians(self.heading))*self.speed)
-        vect_y = int(math.sin(math.radians(self.heading))*self.speed)
+        vect_x = int(math.cos(math.radians(self.current_heading))*self.speed)
+        vect_y = int(math.sin(math.radians(self.current_heading))*self.speed)
         # Set New Pos
         self.loc_next[0] += vect_x
         self.loc_next[1] += vect_y
@@ -200,7 +237,7 @@ class Boid(pygame.sprite.Sprite):
             self.loc_next[1] = 600 - self.loc[1]
         elif self.loc_next[1] <= 0:
             self.loc_next[1] = self.loc[1] + 600
-        
+    
     def update_loc(self):
         # Set the draw location
         self.rect.x = self.loc_next[0]
@@ -246,7 +283,7 @@ def main():
     clock = pygame.time.Clock()
     going = True
     while going == True:
-        clock.tick(30)
+        clock.tick(60)
         # Handle Input Events
         for event in pygame.event.get():
             if event.type == QUIT:
