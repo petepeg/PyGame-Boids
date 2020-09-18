@@ -40,6 +40,9 @@ class Boid(pygame.sprite.Sprite):
         self.speed = 4
         self.target_heading = random.randint(0, 359)
         self.current_heading = copy.copy(self.target_heading)
+        self.avoid_distance = 10
+        self.heading_avg_distance = 10
+        self.cmass_distance = 100
         self.loc = init_loc
         self.loc_next = copy.copy(self.loc)
         self.rect.x = self.loc[0]
@@ -78,35 +81,31 @@ class Boid(pygame.sprite.Sprite):
     ##################
     def avoid_the_boid(self, boids_group):
         # find closeest boid on the front and sides
-        detection_distance = 10
-        min_boid = 10
+        min_boid = copy.copy(self.avoid_distance)
         boid_dir = 0
+        target_boid_loc = None
         for boid in boids_group:
             # don't look at yourself
             if boid.loc != self.loc:
                 boid_dis = self.distance_to_boid(boid)
-                if boid_dis <= detection_distance and boid_dis < min_boid:
+                if boid_dis < min_boid:
                     min_boid = boid_dis
-                    boid_dir = self.cord_trans(boid.loc)
+                    target_boid_loc = boid.loc
+        if target_boid_loc is not None:
+            boid_dir = self.cord_trans(boid.loc) # pulled out of loop to only do once per cycle
         if min_boid < 2:
             # emergency turn
             return 5
         else:
-            return boid_dir
+            return boid_dir # return value of 0 means no boids in dection dis
     
     ##################
     # Center of Mass #
     ##################
     # Find Center of mass for local group
-    def center_mass(self, boids_group):
-        detection_distance = 100
-        close_boids = []
+    def center_mass(self, close_boids):
         c_mass = [0,0]
 
-        for boid in boids_group:
-            boid_dis = self.distance_to_boid(boid)
-            if boid_dis <= detection_distance:
-                close_boids.append(boid)
         if len(close_boids) > 1:
             for boid in close_boids:
                 c_mass[0] += boid.loc[0]
@@ -119,30 +118,65 @@ class Boid(pygame.sprite.Sprite):
         else:
             return None
     
+    ##########################
+    # Align To Group Heading #
+    ##########################
+    def group_avg_heading(self, local_group):
+        heading_avg = 0
+        # If detection distance is too high they seem to convirge on 180ish and I suspect because its the avg of numbers 0-360. The center of mass calc than somehow rotates this avg by 90 deg making them prefer 270. Weird but ok.
+        if len(local_group) > 1:
+            for boid in local_group:
+                heading_avg += boid.current_heading
+            heading_avg = int(heading_avg/len(local_group))
+        else:
+            heading_avg = self.current_heading
+
+        return heading_avg
+
+    ####################
+    # Rescale Headings #
+    ####################
+    def rescale_heading(self,heading):
+        while heading > 360 or heading < 0:
+            if heading < 0:
+                heading = heading + 360
+            if heading > 360:
+                heading = heading - 360
+        return heading
+    
+    #####################
+    # Create the Groups #
+    #####################
+    def create_local_groups(self,boids_group):
+        avoid_group = []
+        heading_avg_group = []
+        cmass_group = []
+        for boid in boids_group:
+            dtb = self.distance_to_boid(boid)
+            if dtb <= self.avoid_distance:
+                avoid_group.append(boid)
+            if dtb <= self.heading_avg_distance:
+                heading_avg_group.append(boid)
+            if dtb <= self.cmass_distance:
+                cmass_group.append(boid)
+        return [heading_avg_group,cmass_group,avoid_group]
+
     ###################    
     # Update The Boid #
     ###################
     def update(self, boids_group):
-        # Get Close by boids
-        local_group = []
-        detection_distance = 10
-        for boid in boids_group.sprites():
-            if self.distance_to_boid(boid) <= detection_distance:
-                local_group.append(boid)
-        # Alignment
-        # Heading Avg
-        # If detection distance is too high they seem to convirge on 180ish and I suspect because its the avg of numbers 0-360. The center of mass calc than somehow rotates this avg by 90 deg making them prefer 270. Weird but ok.
-        if len(local_group) > 1:
-            heading_avg = 0
-            for boid in local_group:
-                heading_avg += boid.current_heading
-            heading_avg = int(heading_avg/len(local_group))
-            self.target_heading = heading_avg
+        # Create Local Groups
+        # 0 - heading_avg_group, 1 - cmass_group, 2-avoid_group
+        local_groups = self.create_local_groups(boids_group.sprites())
+        
+        # Align To Group
+        self.target_heading = self.group_avg_heading(local_groups[0])
+
         # Cohesion
         # Turn to Center of Mass
-        # This is workign better than the last version but still sucks
-        c_mass_loc = self.center_mass(boids_group.sprites())
-        #c_mass_loc = [300, 300]
+        # This is workign better than the last version but still needs improvment
+        c_mass_loc = self.center_mass(local_groups[1]) 
+        
         if c_mass_loc is not None:
             deg_Turn = 10
             dx = c_mass_loc[0] - self.loc[0]
@@ -157,12 +191,8 @@ class Boid(pygame.sprite.Sprite):
             # Correct the heading when target is to the left
             if dx < 0:
                 angleD = angleD + 180
-            
-            # Scale angle
-            if angleD < 0:
-                angleD = 360 + angleD
-            elif angleD > 360:
-                angleD = angleD - 360
+
+            angleD = self.rescale_heading(angleD)
 
             # decide if clockwise or counter clockwise is shorter
             if angleD < self.target_heading:
@@ -179,7 +209,7 @@ class Boid(pygame.sprite.Sprite):
         
         # Seperation
         # The left front should be quad 1 and the rigth front should be quad 4 after the transformation
-        close_boid_dir = self.avoid_the_boid(boids_group.sprites())
+        close_boid_dir = self.avoid_the_boid(local_groups[2])
         sep_deg_turn = 15
         if close_boid_dir == 1:
             self.target_heading -= sep_deg_turn
@@ -190,13 +220,9 @@ class Boid(pygame.sprite.Sprite):
             self.target_heading += sep_deg_turn * 3
         
         # Heading corrections, keeps headings from coumpunding into gigantic numbers
-        while self.target_heading > 360 or self.target_heading < 0:
-            if self.target_heading < 0:
-                self.target_heading = self.target_heading + 360
-            if self.target_heading > 360:
-                self.target_heading = self.target_heading - 360
+        self.target_heading = self.rescale_heading(self.target_heading)
 
-        # Turning, FIXME iffy at the moment
+        # Turning 
         turning_speed = 5
         # Turning attempt 2
         if self.target_heading > self.current_heading:
@@ -212,12 +238,8 @@ class Boid(pygame.sprite.Sprite):
                 self.current_heading -= turning_speed
         
         # Heading corrections, keeps headings from coumpunding into gigantic numbers
-        while self.current_heading > 360 or self.current_heading < 0:
-            if self.current_heading < 0:
-                self.current_heading = self.current_heading + 360
-            if self.current_heading > 360:
-                self.current_heading = self.current_heading - 360
-        
+        self.current_heading = self.rescale_heading(self.current_heading)
+        # setting target heading to the final current heading for the next round.
         self.target_heading = copy.copy(self.current_heading)
 
         # Calc movement vectors #
@@ -276,7 +298,7 @@ def main():
     
     # Create the boids
     boids_group = pygame.sprite.Group()
-    for n in range(60):
+    for n in range(100):
         loc = [random.randint(0,599), random.randint(0,599)]
         boids_group.add(Boid(init_loc=loc))
     
