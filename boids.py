@@ -174,14 +174,13 @@ class Boid(pygame.sprite.Sprite):
 
         # Cohesion
         # Turn to Center of Mass
-        # This is workign better than the last version but still needs improvment
+        # This is workign better than the last version but still needs improvement
         c_mass_loc = self.center_mass(local_groups[1]) 
         
         if c_mass_loc is not None:
-            deg_Turn = 10
             dx = c_mass_loc[0] - self.loc[0]
             dy = c_mass_loc[1] - self.loc[1]
-            if dx == 0: # dont divide by zero
+            if dx == 0: # dont divide by zero, set to an really small number instead
                 dx = 0.0000000000001
             if dy == 0:
                 dy = 0.0000000000001
@@ -195,6 +194,8 @@ class Boid(pygame.sprite.Sprite):
             angleD = self.rescale_heading(angleD)
 
             # decide if clockwise or counter clockwise is shorter
+            # TODO make a function for this that also works with turning
+            deg_Turn = 10
             if angleD < self.target_heading:
                 if self.target_heading - angleD > 180:
                     self.target_heading += deg_Turn
@@ -208,7 +209,7 @@ class Boid(pygame.sprite.Sprite):
                     self.target_heading += deg_Turn
         
         # Seperation
-        # The left front should be quad 1 and the rigth front should be quad 4 after the transformation
+        # The left front should be quad 1 and the right front should be quad 4 after the transformation
         close_boid_dir = self.avoid_the_boid(local_groups[2])
         sep_deg_turn = 15
         if close_boid_dir == 1:
@@ -219,7 +220,7 @@ class Boid(pygame.sprite.Sprite):
             # Emergency Turn
             self.target_heading += sep_deg_turn * 3
         
-        # Heading corrections, keeps headings from coumpunding into gigantic numbers
+        # Heading corrections, keeps headings from compounding into gigantic numbers
         self.target_heading = self.rescale_heading(self.target_heading)
 
         # Turning 
@@ -237,7 +238,7 @@ class Boid(pygame.sprite.Sprite):
             else:
                 self.current_heading -= turning_speed
         
-        # Heading corrections, keeps headings from coumpunding into gigantic numbers
+        # Heading corrections, keeps headings from compounding into gigantic numbers
         self.current_heading = self.rescale_heading(self.current_heading)
         # setting target heading to the final current heading for the next round.
         self.target_heading = copy.copy(self.current_heading)
@@ -250,11 +251,12 @@ class Boid(pygame.sprite.Sprite):
         self.loc_next[1] += vect_y
         
         ## Wrap screen
+        # x
         if self.loc_next[0] >= 600:
             self.loc_next[0] = 600 - self.loc[0]
         elif self.loc_next[0] <= 0:
             self.loc_next[0] = self.loc[0] + 600
-        
+        #y
         if self.loc_next[1] >= 600:
             self.loc_next[1] = 600 - self.loc[1]
         elif self.loc_next[1] <= 0:
@@ -270,7 +272,7 @@ class Boid(pygame.sprite.Sprite):
 # Draw the screen #
 ###################
 
-# Create The Backgound
+# Create The Background
 def draw_screen(screen):
     background = pygame.Surface(screen.get_size())
     background = background.convert()
