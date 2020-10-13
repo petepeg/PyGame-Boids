@@ -36,7 +36,7 @@ class Boid(pygame.sprite.Sprite):
         self.color = (random.randint(0,255),random.randint(0,255),random.randint(0,255))
         self.image.fill(self.color)
         self.rect = self.image.get_rect()
-        # Inital speed, heading, location
+        # Initial speed, heading, location
         self.speed = 4
         self.target_heading = random.randint(0, 359)
         self.current_heading = copy.copy(self.target_heading)
@@ -97,7 +97,7 @@ class Boid(pygame.sprite.Sprite):
             # emergency turn
             return 5
         else:
-            return boid_dir # return value of 0 means no boids in dection dis
+            return boid_dir # return value of 0 means no boids in detection dis
     
     ##################
     # Center of Mass #
@@ -118,19 +118,33 @@ class Boid(pygame.sprite.Sprite):
         else:
             return None
     
+    #######################################
+    # Convert Degrees to Component Vector #
+    #######################################
+    def deg_to_vector(self,heading,speed):
+        y_component = math.cos(math.radians(heading))*speed
+        x_component = math.sin(math.radians(heading))*speed
+        return (x_component,y_component)
+    
     ##########################
     # Align To Group Heading #
     ##########################
     def group_avg_heading(self, local_group):
-        heading_avg = 0
-        # If detection distance is too high they seem to convirge on 180ish and I suspect because its the avg of numbers 0-360. The center of mass calc than somehow rotates this avg by 90 deg making them prefer 270. Weird but ok.
+        # https://en.wikipedia.org/wiki/Mean_of_circular_quantities
+        heading_avg = (0.001,0.001)
+        # Group size of one is a lonley boid
         if len(local_group) > 1:
             for boid in local_group:
-                heading_avg += boid.current_heading
-            heading_avg = int(heading_avg/len(local_group))
+                # Convert Heading to Vector components
+                boid_vec = self.deg_to_vector(boid.current_heading,boid.speed)
+                # Add vectors components together
+                heading_avg = tuple(map(sum,zip(heading_avg,boid_vec)))
+            # Get the average heading with arctan sum x / sum y, than drop the decimal and rescale
+            heading_avg = math.atan(heading_avg[0]/heading_avg[1])
+            heading_avg = self.rescale_heading(int(math.degrees(heading_avg)))
         else:
             heading_avg = self.current_heading
-
+            
         return heading_avg
 
     ####################
@@ -180,7 +194,7 @@ class Boid(pygame.sprite.Sprite):
         if c_mass_loc is not None:
             dx = c_mass_loc[0] - self.loc[0]
             dy = c_mass_loc[1] - self.loc[1]
-            if dx == 0: # dont divide by zero, set to an really small number instead
+            if dx == 0: # don't divide by zero, set to an really small number instead
                 dx = 0.0000000000001
             if dy == 0:
                 dy = 0.0000000000001
