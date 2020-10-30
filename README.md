@@ -1,5 +1,7 @@
 # PyGame Boids
 ### An Implementation of Boids in PyGame. 
+Update v0.4:
+Discovered more bad math again, this time it was trying to average headings. I also increased performance by reducing the number of times each boid traverses the list of all boids and also reduced the number of times I was doing expensive calculations. Fixing the heading averages got them to stop converging so consider that bug squashed. They still seem to like some areas more than others, but I think that has to do with the walls wrapping. I also cleaned things up a bit and reduced repeated code.
 
 Update v0.3:
 Found some more silent bugs, mostly bad trig and fixed those. Adding a turning speed to make them less jittery. Did a lot of tweaking to the parameters, when the detection range for average heading was too high, they tend to converge on a single heading and get stuck there. I also ditched the PyGame built-in sprite collision as it was only used by one of the rules and just wasn't consistent with the rest of the code. I’m pretty happy with the results at this point but I still want to clean some things up as it’s all pretty messy.
